@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 
 ##############################################################################
 # Unicaster mDNS - Copyright © 2018 Santiago Saavedra
@@ -110,7 +112,7 @@ This program comes with ABSOLUTELY NO WARRANTY.
 This is free software, and you are welcome to redistribute it
 under certain conditions; you can see the full license
 at https://www.gnu.org/licenses/gpl.html
-""")
+""".encode('utf-8'))
     resolver = Resolver()
     s = DNSServer(resolver,
                   os.environ.get('DNS_HOST', ''),
