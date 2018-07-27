@@ -1,0 +1,7 @@
+*~
+*.swp
+config.py
+
+__pycache__/
+env/
+venv/
