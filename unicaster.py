@@ -85,20 +85,19 @@ class Resolver(object):
         sock.sendto(d.pack(), (nameserver4, 5353))
         # sock.sendto(d.pack(), (nameserver6, 5353))
 
-        try:
-            while True:
-                buf, remote = sock.recvfrom(8192)
-                d = DNSRecord.parse(buf)
-                success = False
-                if (d.header.aa == 1) and (d.header.a > 0):
-                    for response in d.rr:
-                        if str(response.rname) == qname:
-                            success = True
-                            response.rclass = CLASS.IN
-                            reply.add_answer(response)
-                            # print(reply)
-                if success:
-                    break
+        while True:
+            buf, remote = sock.recvfrom(8192)
+            d = DNSRecord.parse(buf)
+            success = False
+            if (d.header.aa == 1) and (d.header.a > 0):
+                for response in d.rr:
+                    if str(response.rname) == qname:
+                        success = True
+                        response.rclass = CLASS.IN
+                        reply.add_answer(response)
+                        # print(reply)
+            if success:
+                break
         return reply
             
 
@@ -115,5 +114,5 @@ at https://www.gnu.org/licenses/gpl.html
     resolver = Resolver()
     s = DNSServer(resolver,
                   os.environ.get('DNS_HOST', ''),
-                  os.environ.get('DNS_PORT', 5053))
+                  int(os.environ.get('DNS_PORT', 5053)))
     s.start()
