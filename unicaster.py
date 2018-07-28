@@ -20,12 +20,13 @@
 ##############################################################################
 
 from dnslib import CLASS, RR, RDMAP, QTYPE, A, AAAA, DNSRecord, DNSHeader, DNSQuestion
+from dnslib.label import DNSLabel
 from dnslib.server import DNSServer
 from dnslib.intercept import InterceptResolver
 
 import signal, socket, struct, sys, os
 
-from config import mdns_domain, forward_dns_host, forward_dns_port, forward_dns_tcp, static_entries
+from config import mdns_domains, alternative_nonlocal_domains, forward_dns_host, forward_dns_port, forward_dns_tcp, static_entries
 
 # Include IN_mDNS class to the dnslib
 CLASS.forward[0x8001] = 'IN_mDNS'
@@ -66,26 +67,36 @@ class Resolver(object):
                     reply.add_answer(response)
             return reply
 
-        if str(qname).endswith(mdns_domain):
+        if any([str(qname).endswith(d) for d in mdns_domains]):
             # print("Querying mDNS")
             return self.resolve_mdns(request, handler)
-        else:
-            # print("Querying upstream DNS")
-            return self.resolve_fwd(request, handler)
+
+        for f, repl in alternative_nonlocal_domains.items():
+            # print("Asking for {} v. {}".format(qname, f))
+            if qname.matchSuffix(f):
+                print("Matched suffix. Rewriting query from {} to {}".format(f, repl))
+                request.q.qname = DNSLabel(repl).add(qname.stripSuffix(f))
+                print("Now querying for: {}".format(request.q.qname))
+                return self.resolve_mdns(request, handler, rewrite=qname)
+
+        # print("Querying upstream DNS")
+        return self.resolve_fwd(request, handler)
 
     def resolve_fwd(self, request, handler):
         r = InterceptResolver(
             forward_dns_host, forward_dns_port, "1s", [], [], [], timeout=1)
         return r.resolve(request, handler)
 
-    def resolve_mdns(self, request, handler):
-        reply = request.reply()
-        qname = request.q.qname
+    def resolve_mdns(self, request, handler, rewrite=None):
 
         sock = get_mdns_socket()
         d = DNSRecord(DNSHeader(id = 0, bitmap = 0), q = request.q)
         sock.sendto(d.pack(), (nameserver4, 5353))
         # sock.sendto(d.pack(), (nameserver6, 5353))
+        qname = request.q.qname
+        if rewrite:
+            request.q.qname = rewrite
+        reply = request.reply()
 
         while True:
             buf, remote = sock.recvfrom(8192)
@@ -96,7 +107,14 @@ class Resolver(object):
                     if str(response.rname) == qname:
                         success = True
                         response.rclass = CLASS.IN
+
+                        # These two lines can be deleted if we dont want the original response
                         reply.add_answer(response)
+                        response = RR.fromZone(response.toZone())[0]
+
+                        if rewrite:
+                            response.rname = rewrite
+                            reply.add_answer(response)
                         # print(reply)
             if success:
                 break
